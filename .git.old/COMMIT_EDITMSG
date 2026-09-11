@@ -1,0 +1,11 @@
+feat: Add budgets, expense categories, payroll account mappings
+
+- Add Budget module with annual budgets and line items
+- Add Budget vs Actual reports and monthly analysis
+- Add Expense Categories (finance settings)
+- Add Banks (finance settings)
+- Add Payroll Account Mappings (configurable GL accounts)
+- Add Budget check on voucher form
+- Add Dashboard with budget widget
+- Move expense categories from HR Settings to Finance Settings
+- Update navigation with Budgets and Finance Settings

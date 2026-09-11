@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.turbo/
+uploads/
+*.tsbuildinfo
+packages/shared/dist/
+
+uploads/
+
+# Dev-only compose override (not for production deployment)
+docker-compose.override.yml

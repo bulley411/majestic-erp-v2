@@ -1,0 +1,85 @@
+# Majestic APA ERP — single compose file for local and staging.
+#
+# Locally, docker-compose.override.yml adds published ports and hot reload.
+# On the VPS, Dokploy uses this file as-is: images are pulled from GHCR,
+# nothing is built on the server, and Traefik routes by the labels below.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Payroll periods must not shift with the server's local timezone.
+      TZ: UTC
+      PGTZ: UTC
+    # Tuned down from defaults, which assume a dedicated database server.
+    command: >
+      postgres
+      -c shared_buffers=384MB
+      -c effective_cache_size=1GB
+      -c work_mem=8MB
+      -c maintenance_work_mem=96MB
+      -c max_connections=50
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 192mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks: [internal]
+    labels:
+      - "traefik.docker.network=dokploy-network"
+  api:
+    image: ghcr.io/bulley411/majestic-erp-api:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      NODE_ENV: ${NODE_ENV:-production}
+      TZ: UTC
+      UPLOAD_DIR: /app/uploads
+      NODE_OPTIONS: "--max-old-space-size=768"
+      CORS_ORIGIN: https://erp-staging.majesticpensionagent.com
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    # Must be on dokploy-network, or Traefik cannot see it at all.
+    networks: [internal, dokploy-network]
+   
+  web:
+    image: ghcr.io/bulley411/majestic-erp-web:latest
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks: [internal, dokploy-network]
+    labels:
+      - "traefik.docker.network=dokploy-network"
+      # A server-wide security rule blocks /assets, /js and /config at
+      # priority 200 to deter scanners. Vite serves its bundle from
+      # /assets, so this router must outrank it for our hostname.
+      - "traefik.http.routers.mapaerp-mapaerp-hckgqa-4-websecure.priority=1000"
+      - "traefik.http.routers.mapaerp-mapaerp-hckgqa-4-web.priority=1000"
+volumes:
+  db_data:
+  redis_data:
+  uploads:
+
+networks:
+  internal:
+    driver: bridge
+  dokploy-network:
+    external: true
