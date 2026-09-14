@@ -22,7 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
 const AVATAR_TONES = ['a1', 'a2', 'a3', 'a4', 'a5'];
 
 //const naira = (v: string | null) =>
-  //v === null ? '—' : '₦' + Number(v).toLocaleString('en-NG', { maximumFractionDigits: 0 });
+  //v === null ? '—' : '₦' + Number(v).toLocaleString('en-NG', { maximumFractionDigits: 0 }); 
 
 const initials = (e: Employee) => (e.firstName[0] ?? '') + (e.lastName[0] ?? '');
 
