@@ -21,8 +21,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 const AVATAR_TONES = ['a1', 'a2', 'a3', 'a4', 'a5'];
 
-const naira = (v: string | null) =>
-  v === null ? '—' : '₦' + Number(v).toLocaleString('en-NG', { maximumFractionDigits: 0 });
+//const naira = (v: string | null) =>
+  //v === null ? '—' : '₦' + Number(v).toLocaleString('en-NG', { maximumFractionDigits: 0 });
 
 const initials = (e: Employee) => (e.firstName[0] ?? '') + (e.lastName[0] ?? '');
 
@@ -93,13 +93,13 @@ function Card({ employee, tone, onOpen }: {
 
       <FileMeter employee={employee} />
 
-      <div className="foot">
+      {/**<div className="foot">
         <span>Monthly gross</span>
         <span className="pay">
           {naira(employee.currentGross)}
           <small>/mo</small>
         </span>
-      </div>
+      </div>*/}
     </article>
   );
 }
