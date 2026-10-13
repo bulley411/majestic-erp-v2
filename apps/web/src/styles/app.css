@@ -1208,6 +1208,16 @@ h2.page{font-family:'Archivo';font-size:25px;font-weight:600;letter-spacing:-.02
     margin-bottom: 2px;
   }
 }
+
+/* ---------- payments ---------- */
+
+/* Uses existing typelist, dtable, runsummary classes */
+/* Add specific overrides if needed */
+.payments-tab-panel {
+  /* Reserved for future custom styling */
+}
+
+
 @media (max-width: 700px) {
   .fin-balance-summary {
     grid-template-columns: 1fr;

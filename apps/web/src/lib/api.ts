@@ -1101,6 +1101,13 @@ export interface Voucher {
     createdAt: string;
   }[];
   _count?: { approvals: number };
+  // ⬇️ ADD THIS ⬇️
+  payments?: {
+    id: string;
+    reference: string;
+    status: 'PENDING' | 'BATCHED' | 'SENT' | 'PAID' | 'FAILED' | 'CANCELLED';
+  }[];
+  // ⬆️ END ADD ⬆️
 }
 
 export interface VoucherApprovalInfo {
@@ -1389,6 +1396,251 @@ export const getPayrollMappings = () =>
 
 export const setPayrollMapping = (key: string, accountId: string) =>
   api<PayrollMapping>(`/payroll/settings/accounts/${key}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ accountId }),
+  });
+
+
+  /* ------------------------------ payments ----------------------------- */
+
+export type PaymentType =
+  | 'VOUCHER'
+  | 'COMMISSION'
+  | 'PAYROLL_NET'
+  | 'PAYROLL_PAYE'
+  | 'PAYROLL_PENSION'
+  | 'PAYROLL_NHF'
+  | 'OTHER';
+
+export type PaymentStatus =
+  | 'PENDING'
+  | 'BATCHED'
+  | 'SENT'
+  | 'PAID'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export type PayeeType = 'VENDOR' | 'EMPLOYEE' | 'STATUTORY' | 'OTHER';
+
+export type BatchStatus =
+  | 'DRAFT'
+  | 'READY'
+  | 'SENT'
+  | 'PAID'
+  | 'PARTIAL'
+  | 'FAILED';
+
+export interface Payment {
+  id: string;
+  reference: string;
+  voucherId: string | null;
+  voucher: { id: string; voucherNo: string; description: string } | null;
+  batchId: string | null;
+  batch: { id: string; reference: string; status: BatchStatus } | null;
+  type: PaymentType;
+  payeeType: PayeeType;
+  payeeId: string | null;
+  payeeName: string;
+  description: string;
+  amount: string;
+  whtAmount: string;
+  netAmount: string;
+  beneficiaryBank: string | null;
+  beneficiaryBankCode: string | null;
+  beneficiaryAccount: string | null;
+  beneficiaryAccountName: string | null;
+  bankId: string | null;
+  bank: { id: string; name: string } | null;
+  status: PaymentStatus;
+  externalReference: string | null;
+  paidAt: string | null;
+  journalEntryId: string | null;
+  recordedById: string | null;
+  recordedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  history?: PaymentHistoryEntry[];
+  journalEntry?: {
+    id: string;
+    reference: string;
+    date: string;
+    narration: string;
+    lines: {
+      id: string;
+      debit: string;
+      credit: string;
+      account: { id: string; code: string; name: string };
+    }[];
+  } | null;
+}
+
+export interface PaymentHistoryEntry {
+  id: string;
+  action: string;
+  actorId: string | null;
+  remarks: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface PaymentBatch {
+  id: string;
+  reference: string;
+  description: string;
+  status: BatchStatus;
+  paymentCount: number;
+  totalAmount: string;
+  bankFileGeneratedAt: string | null;
+  bankFileOriginalName: string | null;
+  submittedAt: string | null;
+  submittedById: string | null;
+  completedAt: string | null;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { payments: number };
+  payments?: Payment[];
+}
+
+export interface PaymentPayableMapping {
+  key: string;
+  accountId: string | null;
+  accountCode: string | null;
+  accountName: string | null;
+  accountType: string | null;
+  isConfigured: boolean;
+  meta: {
+    label: string;
+    description: string;
+    expectedType: string;
+  };
+}
+
+export const listPayments = (filters?: {
+  status?: string;
+  type?: string;
+  batchId?: string;
+  fromDate?: string;
+  toDate?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (filters?.status) params.append('status', filters.status);
+  if (filters?.type) params.append('type', filters.type);
+  if (filters?.batchId) params.append('batchId', filters.batchId);
+  if (filters?.fromDate) params.append('fromDate', filters.fromDate);
+  if (filters?.toDate) params.append('toDate', filters.toDate);
+  const query = params.toString();
+  return api<Payment[]>(`/payments${query ? `?${query}` : ''}`);
+};
+
+export const getPayment = (id: string) => api<Payment>(`/payments/${id}`);
+
+export const createPaymentFromVoucher = (
+  voucherId: string,
+  data: Record<string, unknown>,
+) =>
+  api<Payment>(`/payments/from-voucher/${voucherId}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const deletePayment = (id: string) =>
+  api<{ ok: boolean }>(`/payments/${id}`, { method: 'DELETE' });
+
+/* --------------------------- payment batches ---------------------- */
+
+export const listPaymentBatches = (status?: string) =>
+  api<PaymentBatch[]>(
+    `/payment-batches${status ? `?status=${status}` : ''}`,
+  );
+
+export const getPaymentBatch = (id: string) =>
+  api<PaymentBatch>(`/payment-batches/${id}`);
+
+export const createPaymentBatch = (data: { description: string }) =>
+  api<PaymentBatch>('/payment-batches', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const addPaymentsToBatch = (batchId: string, paymentIds: string[]) =>
+  api<PaymentBatch>(`/payment-batches/${batchId}/payments`, {
+    method: 'POST',
+    body: JSON.stringify({ paymentIds }),
+  });
+
+export const removePaymentFromBatch = (batchId: string, paymentId: string) =>
+  api<PaymentBatch>(`/payment-batches/${batchId}/payments/${paymentId}`, {
+    method: 'DELETE',
+  });
+
+export const generateBankFile = (batchId: string) =>
+  api<PaymentBatch>(`/payment-batches/${batchId}/generate-file`, {
+    method: 'POST',
+  });
+
+export const submitPaymentBatch = (batchId: string) =>
+  api<PaymentBatch>(`/payment-batches/${batchId}/submit`, {
+    method: 'POST',
+  });
+
+export const markPaymentBatchPaid = (
+  batchId: string,
+  data: {
+    paidAt: string;
+    externalReference?: string;
+    notes?: string;
+  },
+) =>
+  api<{ batch: PaymentBatch; paidCount: number }>(
+    `/payment-batches/${batchId}/mark-paid`,
+    { method: 'POST', body: JSON.stringify(data) },
+  );
+
+export const discardPaymentBatch = (batchId: string) =>
+  api<{ ok: boolean }>(`/payment-batches/${batchId}`, { method: 'DELETE' });
+
+export const downloadBankFile = async (
+  batchId: string,
+  filename: string,
+) => {
+  const send = (token: string | null) =>
+    fetch(`${BASE}/api/payment-batches/${batchId}/download`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+  let res = await send(getAccessToken());
+  if (res.status === 401) {
+    const fresh = await refreshAccessToken();
+    if (fresh) res = await send(fresh);
+  }
+  if (!res.ok) throw new ApiError('Could not download the bank file.', res.status);
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
+/* ------------------------ payment payable config ----------------- */
+
+export const getPaymentPayableConfig = () =>
+  api<Record<string, PaymentPayableMapping>>('/payment-payable-config');
+
+export const verifyPaymentPayableConfig = () =>
+  api<{ allConfigured: boolean; missing: string[] }>(
+    '/payment-payable-config/verify',
+  );
+
+export const setPaymentPayableConfig = (key: string, accountId: string) =>
+  api<PaymentPayableMapping>(`/payment-payable-config/${key}`, {
     method: 'PATCH',
     body: JSON.stringify({ accountId }),
   });

@@ -44,6 +44,15 @@ export class VouchersService {
         _count: {
           select: { approvals: true },
         },
+        // ⬇️ ADD THIS ⬇️
+      payments: {
+        select: {
+          id: true,
+          reference: true,
+          status: true,
+        },
+      },
+      // ⬆️ END ADD ⬆️
       },
     });
   }
@@ -71,6 +80,15 @@ export class VouchersService {
         approvals: {
           orderBy: { createdAt: 'asc' },
         },
+         // ⬇️ ADD THIS ⬇️
+      payments: {
+        select: {
+          id: true,
+          reference: true,
+          status: true,
+        },
+      },
+      // ⬆️ END ADD ⬆️
       },
     });
   }

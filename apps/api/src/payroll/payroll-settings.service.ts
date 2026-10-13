@@ -155,4 +155,26 @@ export class PayrollSettingsService {
 
     return result;
   }
+
+  async getRequired(key: string) {
+  const config = await this.prisma.payrollAccountMapping.findUnique({
+    where: { key: key as any },
+    include: { account: true },
+  });
+
+  if (!config) {
+    throw new BadRequestException(
+      `Payroll account "${key}" is not configured. ` +
+        `Set it in Settings → Finance settings → Payroll accounts.`,
+    );
+  }
+
+  if (!config.account.isActive) {
+    throw new BadRequestException(
+      `Payroll account "${config.account.code} - ${config.account.name}" is inactive.`,
+    );
+  }
+
+  return config;
+}
 }

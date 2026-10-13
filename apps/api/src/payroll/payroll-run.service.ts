@@ -204,6 +204,7 @@ export class PayrollRunService {
         annualRentPaid: employee.annualRentPaid
           ? new Decimal(employee.annualRentPaid.toString())
           : new Decimal(0),
+        
         nhfEnrolled: employee.nhfEnrolled,
         bands,
       });

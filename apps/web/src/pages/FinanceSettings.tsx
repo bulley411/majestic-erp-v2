@@ -3,11 +3,13 @@ import { useAuth } from '../lib/auth-context';
 import ExpenseCategoriesPanel from './settings/ExpenseCategoriesPanel';
 import BanksPanel from './settings/BanksPanel';
 import PayrollAccountsPanel from './settings/PayrollAccountsPanel';
+import PaymentPayablesPanel from './settings/PaymentPayablesPanel';
 
 const TABS = [
   { id: 'expense-categories', label: 'Expense categories' },
   { id: 'banks', label: 'Banks' },
   { id: 'payroll-accounts', label: 'Payroll accounts' },
+  { id: 'payment-payables', label: 'Payment payables' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -62,6 +64,9 @@ export default function FinanceSettings() {
         {tab === 'payroll-accounts' ? (
           <PayrollAccountsPanel manage={manage} onError={setError} />
         ) : null}
+        {tab === 'payment-payables' ? (
+  <PaymentPayablesPanel manage={manage} onError={setError} />
+) : null}
       </div>
     </>
   );

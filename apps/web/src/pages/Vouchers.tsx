@@ -7,6 +7,7 @@ import {
   ApiError, type Voucher, type BudgetCheckResult,
 } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
+import CreatePaymentDialog from './payments/CreatePaymentDialog';
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'info',
@@ -25,6 +26,8 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Paid',
   REJECTED: 'Rejected',
 };
+
+const ACTIVE_PAYMENT_STATUSES = ['PENDING', 'BATCHED', 'SENT', 'PAID'];
 
 const naira = (v: string) =>
   '₦' + Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 });
@@ -58,6 +61,7 @@ export default function Vouchers() {
   const [draft, setDraft] = useState<typeof blankVoucher | null>(null);
   const [editing, setEditing] = useState<Voucher | null>(null);
   const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
+  const [showCreatePayment, setShowCreatePayment] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -85,8 +89,6 @@ export default function Vouchers() {
     queryKey: ['banks'],
     queryFn: listBanks,
   });
-
-  
 
   const flashSuccess = (msg: string) => {
     setSuccess(msg);
@@ -121,7 +123,12 @@ export default function Vouchers() {
   const transition = useMutation({
     mutationFn: ({ id, action, remarks }: { id: string; action: string; remarks?: string }) =>
       transitionVoucher(id, action, remarks),
-    onSuccess: (v) => { done(); flashSuccess(`Voucher ${v.voucherNo} updated.`); },
+    onSuccess: (v) => {
+      qc.invalidateQueries({ queryKey: ['vouchers'] });
+      setSelectedVoucher(null);
+      setError(null);
+      flashSuccess(`Voucher ${v.voucherNo} updated.`);
+    },
     onError: fail,
   });
 
@@ -142,20 +149,45 @@ export default function Vouchers() {
 
   // --- Detail View ---
   if (selectedVoucher) {
+    const hasActivePayment =
+      selectedVoucher.payments &&
+      selectedVoucher.payments.some((p) =>
+        ACTIVE_PAYMENT_STATUSES.includes(p.status),
+      );
+
     return (
-      <VoucherDetail
-        voucher={selectedVoucher}
-        onClose={() => setSelectedVoucher(null)}
-        onTransition={(action, remarks) => {
-          transition.mutate({ id: selectedVoucher.id, action, remarks });
-        }}
-        onPost={() => post.mutate(selectedVoucher.id)}
-        canApprove={canApprove}
-        canPost={canPost}
-        busy={busy}
-        error={error}
-        success={success}
-      />
+      <>
+        <VoucherDetail
+          voucher={selectedVoucher}
+          onClose={() => setSelectedVoucher(null)}
+          onTransition={(action, remarks) => {
+            transition.mutate({ id: selectedVoucher.id, action, remarks });
+          }}
+          onPost={() => post.mutate(selectedVoucher.id)}
+          onCreatePayment={() => setShowCreatePayment(selectedVoucher.id)}
+          canApprove={canApprove}
+          canPost={canPost}
+          canCreatePayment={can('payment.create') && !hasActivePayment}
+          busy={busy}
+          error={error}
+          success={success}
+        />
+        {showCreatePayment ? (
+          <CreatePaymentDialog
+            voucherId={showCreatePayment}
+            onClose={() => setShowCreatePayment(null)}
+            onCreated={() => {
+              setShowCreatePayment(null);
+              qc.invalidateQueries({ queryKey: ['vouchers'] });
+              qc.invalidateQueries({ queryKey: ['payments'] });
+              setTimeout(() => {
+                setSelectedVoucher(null);
+                flashSuccess('Payment created. Go to Finance → Payments to batch it.');
+              }, 100);
+            }}
+          />
+        ) : null}
+      </>
     );
   }
 
@@ -259,55 +291,71 @@ export default function Vouchers() {
             <p className="fnote" style={{ padding: 0 }}>No vouchers found.</p>
           ) : (
             <ul className="voucher-list">
-              {vouchers.map((v) => (
-                <li
-                  key={v.id}
-                  className="voucher-row"
-                  onClick={() => setSelectedVoucher(v)}
-                  tabIndex={0}
-                  role="button"
-                  onKeyDown={(e) => { if (e.key === 'Enter') setSelectedVoucher(v); }}
-                >
-                  <div className="voucher-main">
-                    <div className="voucher-header">
-                      <b className="mono">{v.voucherNo}</b>
-                      <span className={`tag ${STATUS_COLORS[v.status]}`}>
-                        {STATUS_LABELS[v.status] || v.status}
-                      </span>
-                      <span className="voucher-date">
-                        {new Date(v.date).toLocaleDateString('en-NG')}
-                      </span>
+              {vouchers.map((v) => {
+                const activePayment = v.payments?.find((p) =>
+                  ACTIVE_PAYMENT_STATUSES.includes(p.status),
+                );
+                const hasPayment = !!activePayment;
+
+                return (
+                  <li
+                    key={v.id}
+                    className="voucher-row"
+                    onClick={() => setSelectedVoucher(v)}
+                    tabIndex={0}
+                    role="button"
+                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedVoucher(v); }}
+                  >
+                    <div className="voucher-main">
+                      <div className="voucher-header">
+                        <b className="mono">{v.voucherNo}</b>
+                        <span className={`tag ${STATUS_COLORS[v.status]}`}>
+                          {STATUS_LABELS[v.status] || v.status}
+                        </span>
+                        {hasPayment ? (
+                          activePayment!.status === 'PAID' ? (
+                            <span className="tag ok">✓ Paid</span>
+                          ) : (
+                            <span className="tag warn">
+                              ⏳ Payment {activePayment!.status.toLowerCase()}
+                            </span>
+                          )
+                        ) : null}
+                        <span className="voucher-date">
+                          {new Date(v.date).toLocaleDateString('en-NG')}
+                        </span>
+                      </div>
+                      <em>{v.description}</em>
+                      <div className="voucher-meta">
+                        {v.vendor ? (
+                          <span className="tag">{v.vendor.code} - {v.vendor.name}</span>
+                        ) : null}
+                        {v.category ? (
+                          <span className="tag">{v.category.name}</span>
+                        ) : null}
+                        <span className="tag">
+                          {v.approvals?.length || 0} approval{v.approvals?.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
                     </div>
-                    <em>{v.description}</em>
-                    <div className="voucher-meta">
-                      {v.vendor ? (
-                        <span className="tag">{v.vendor.code} - {v.vendor.name}</span>
-                      ) : null}
-                      {v.category ? (
-                        <span className="tag">{v.category.name}</span>
-                      ) : null}
-                      <span className="tag">
-                        {v.approvals?.length || 0} approval{v.approvals?.length !== 1 ? 's' : ''}
+                    <div className="voucher-totals">
+                      <span className="voucher-amount">
+                        <b className="mono">{naira(v.amount)}</b>
+                        <small>gross</small>
                       </span>
+                      <span className="voucher-amount">
+                        <span className="mono">{naira(v.netAmount)}</span>
+                        <small>net</small>
+                      </span>
+                      {Number(v.whtRate) > 0 ? (
+                        <span className="voucher-amount" style={{ fontSize: 10, color: 'var(--slate-2)' }}>
+                          WHT {v.whtRate}%
+                        </span>
+                      ) : null}
                     </div>
-                  </div>
-                  <div className="voucher-totals">
-                    <span className="voucher-amount">
-                      <b className="mono">{naira(v.amount)}</b>
-                      <small>gross</small>
-                    </span>
-                    <span className="voucher-amount">
-                      <span className="mono">{naira(v.netAmount)}</span>
-                      <small>net</small>
-                    </span>
-                    {Number(v.whtRate) > 0 ? (
-                      <span className="voucher-amount" style={{ fontSize: 10, color: 'var(--slate-2)' }}>
-                        WHT {v.whtRate}%
-                      </span>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -315,6 +363,7 @@ export default function Vouchers() {
         <p className="fnote">
           Vouchers follow an approval workflow: Draft → Pending Approval → Approved → Posted → Paid.
           ED approves up to ₦500,000; MD approves any amount. Spending is tracked against the active budget.
+          Once approved, click <b>Create Payment</b> to add it to the payment pipeline.
         </p>
       </div>
     </>
@@ -346,7 +395,6 @@ function VoucherForm({
 }) {
   const [budgetCheck, setBudgetCheck] = useState<BudgetCheckResult | null>(null);
 
-  // Check budget when category or amount changes (debounced)
   useEffect(() => {
     if (!draft.categoryId || !draft.amount || draft.amount <= 0 || !draft.date) {
       setBudgetCheck(null);
@@ -513,8 +561,10 @@ function VoucherDetail({
   onClose,
   onTransition,
   onPost,
+  onCreatePayment,
   canApprove,
   canPost,
+  canCreatePayment,
   busy,
   error,
   success,
@@ -523,8 +573,10 @@ function VoucherDetail({
   onClose: () => void;
   onTransition: (action: string, remarks?: string) => void;
   onPost: () => void;
+  onCreatePayment: () => void;
   canApprove: boolean;
   canPost: boolean;
+  canCreatePayment: boolean;
   busy: boolean;
   error: string | null;
   success: string | null;
@@ -533,7 +585,12 @@ function VoucherDetail({
   const canApproveAction = voucher.status === 'PENDING_APPROVAL' && canApprove;
   const canReject = voucher.status === 'PENDING_APPROVAL' && canApprove;
   const canPostAction = voucher.status === 'APPROVED' && canPost;
-  
+  const canCreatePaymentAction =
+    voucher.status === 'APPROVED' && canCreatePayment;
+
+  const activePayment = voucher.payments?.find((p) =>
+    ACTIVE_PAYMENT_STATUSES.includes(p.status),
+  );
 
   const handleReject = () => {
     const remarks = prompt('Reason for rejection:');
@@ -557,6 +614,16 @@ function VoucherDetail({
                 <span className={`tag ${STATUS_COLORS[voucher.status]}`}>
                   {STATUS_LABELS[voucher.status] || voucher.status}
                 </span>
+                {activePayment ? (
+                  <span
+                    className={activePayment.status === 'PAID' ? 'tag ok' : 'tag warn'}
+                    style={{ marginLeft: 8 }}
+                  >
+                    {activePayment.status === 'PAID'
+                      ? `✓ Paid (${activePayment.reference})`
+                      : `⏳ Payment ${activePayment.status.toLowerCase()} (${activePayment.reference})`}
+                  </span>
+                ) : null}
               </span>
             </h2>
           </div>
@@ -605,12 +672,30 @@ function VoucherDetail({
                 Post to ledger
               </button>
             ) : null}
+            {canCreatePaymentAction ? (
+              <button
+                className="btn pri"
+                type="button"
+                disabled={busy}
+                onClick={onCreatePayment}
+              >
+                Create Payment
+              </button>
+            ) : null}
             <button className="btn" type="button" onClick={onClose}>Close</button>
           </div>
         </header>
 
         {error ? <div className="dbanner err">{error}</div> : null}
         {success ? <div className="dbanner">{success}</div> : null}
+
+        {activePayment ? (
+          <div className="dbanner" style={{ marginBottom: 14 }}>
+            <b>Payment already exists:</b> {activePayment.reference} — status:{' '}
+            <b>{activePayment.status}</b>. Manage it in{' '}
+            <b>Finance → Payments</b>.
+          </div>
+        ) : null}
 
         <div className="dbody">
           <div className="fsection">
@@ -698,7 +783,8 @@ function VoucherDetail({
 
           <p className="fnote">
             Vouchers follow the approval chain: ED up to ₦500,000, MD above.
-            The raiser cannot approve their own voucher.
+            The raiser cannot approve their own voucher. Once approved, create a
+            payment to include it in a batch.
           </p>
         </div>
       </div>

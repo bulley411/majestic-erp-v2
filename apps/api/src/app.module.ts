@@ -16,6 +16,7 @@ import { VouchersModule } from './vouchers/vouchers.module';
 import { BudgetsModule } from './budgets/budgets.module';
 import { ExpenseCategoriesModule } from './expense-categories/expense-categories.module';
 import { BanksModule } from './banks/banks.module';
+import { PaymentsModule } from './payments/payments.module';
 @Controller('health')
 class HealthController {
   constructor(private prisma: PrismaService) {}
@@ -29,7 +30,7 @@ class HealthController {
 }
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, EmployeesModule,DocumentsModule,OrgModule,AttendanceModule,PayrollModule,LedgerModule,VendorsModule,VouchersModule,BudgetsModule,ExpenseCategoriesModule,BanksModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, EmployeesModule,DocumentsModule,OrgModule,AttendanceModule,PayrollModule,LedgerModule,VendorsModule,VouchersModule,BudgetsModule,ExpenseCategoriesModule,BanksModule,PaymentsModule],
   controllers: [HealthController],
   // Global. Every route requires a valid token unless marked @Public().
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],

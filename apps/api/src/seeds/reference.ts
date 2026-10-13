@@ -80,6 +80,10 @@ const PERMISSIONS = [
     'budget.read',      // View budgets
   'budget.manage',    // Create/edit budgets
 
+  'payment.read',
+  'payment.create',
+  'payment.execute',
+
 ];
 
 const ROLES: Record<string, { name: string; permissions: string[] }> = {
@@ -92,23 +96,25 @@ const ROLES: Record<string, { name: string; permissions: string[] }> = {
     name: 'Managing Director',
     permissions: ['employee.read', 'payroll.read', 'payroll.approve',
       'ledger.read', 'voucher.read', 'voucher.approve', 'report.read','attendance.read',
-    'budget.read', 'budget.manage',],
+    'budget.read', 'budget.manage','payment.read','payment.execute',],
   },
   FINANCE_HEAD: {
     name: 'Head of Finance',
     permissions: ['employee.read', 'payroll.read', 'payroll.prepare',
       'payroll.review', 'payroll.post', 'payroll.pay', 'ledger.read',
       'ledger.post', 'ledger.close_period', 'voucher.read', 'voucher.raise',
-      'voucher.approve', 'report.read','attendance.read','budget.read', 'budget.manage'],
+      'voucher.approve', 'report.read','attendance.read','budget.read', 'budget.manage',
+    'payment.read', 'payment.create', 'payment.execute',],
   },
   ACCOUNTANT: {
     name: 'Accountant',
     permissions: ['employee.read', 'payroll.read', 'payroll.prepare',
       'payroll.post', 'payroll.pay', 'ledger.read', 'ledger.post',
-      'voucher.read', 'voucher.raise', 'report.read','attendance.read','budget.read'],
+      'voucher.read', 'voucher.raise', 'report.read','attendance.read','budget.read',
+    'payment.read', 'payment.create'],
   },
  HR_OFFICER: {
-    name: 'HR and Admin Officer',
+    name: 'Head HR/Admin',
     permissions: ['employee.read', 'employee.write',
       'employee.document.upload', 'payroll.read', 'report.read',
       'settings.manage', 'user.read','attendance.read','attendance.write'],

@@ -2,8 +2,8 @@
   "name": "@mapa/api",
   "version": "0.1.0",
  "scripts": {
-    "dev": "pnpm --filter @mapa/shared build && nest start --watch",
-    "build": "pnpm --filter @mapa/shared build && nest build",
+    "dev": "corepack pnpm --filter @mapa/shared build && nest start --watch",
+    "build": "corepack pnpm --filter @mapa/shared build && nest build",
     "start:prod": "node dist/main.js",
     "test": "tsx src/payroll/payroll-approval.test.ts && tsx src/vouchers/voucher-approval.test.ts && tsx src/auth/auth.test.ts",
     "prisma:generate": "prisma generate",

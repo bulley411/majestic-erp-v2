@@ -13,6 +13,7 @@ import Vendors from './pages/Vendors';
 import Vouchers from './pages/Vouchers';
 import Budgets from './pages/Budgets';
 import FinanceSettings from './pages/FinanceSettings';import Dashboard from './pages/Dashboard';
+import Payments from './pages/Payments';
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -55,6 +56,7 @@ function Routed() {
         : page === 'ledger' ? <Ledger />
         :page === 'vendors' ? <Vendors /> 
         : page === 'vouchers' ? <Vouchers />
+        :page === 'payments' ? <Payments /> 
         :page === 'dashboard' ? <Dashboard />
         : page === 'hr-settings' ? <HrSettings />
         :page === 'finance-settings' ? <FinanceSettings />

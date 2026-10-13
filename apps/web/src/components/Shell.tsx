@@ -25,6 +25,7 @@ const NAV: { group: string; items: { label: string; key: string; perm?: string }
             { label: 'General ledger', key: 'ledger', perm: 'ledger.read' },
             { label: 'Vendors', key: 'vendors', perm: 'voucher.read' },
       { label: 'Vouchers', key: 'vouchers', perm: 'voucher.read' },
+      { label: 'Payments', key: 'payments', perm: 'payment.read' },  // ← ADD
       { label: 'Reports', key: 'reports' },
        { label: 'Finance settings', key: 'finance-settings', perm: 'voucher.read' },  // ← ADD
     ],
