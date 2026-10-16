@@ -4,6 +4,7 @@ import { PaymentPayableConfigService } from './payment-payable-config.service';
 import { PayrollSettingsService } from '../payroll/payroll-settings.service';
 import { z } from 'zod';
 import { createPaymentSchema } from './dto/schemas';
+import { CommissionPayoutService } from '../commission-payout/commission-payout.service';
 
 @Injectable()
 export class PaymentsService {
@@ -11,6 +12,7 @@ export class PaymentsService {
     private prisma: PrismaService,
     private paymentPayableConfig: PaymentPayableConfigService,
     private payrollSettings: PayrollSettingsService,
+    private commission: CommissionPayoutService,   // ← ADD
   ) {}
 
   async findAll(filters: {
@@ -117,7 +119,12 @@ export class PaymentsService {
     );
   }
   // ⬆️ END ADD ⬆️
-  const type = 'VOUCHER';
+  // Detect commission voucher via batch relation
+const commissionBatch = await this.prisma.commissionPayoutBatch.findFirst({
+  where: { voucherId: voucherId },
+  select: { id: true },
+});
+const type = commissionBatch ? 'COMMISSION' : 'VOUCHER';
   await this.verifyPayableForType(type);
 
   const count = await this.prisma.payment.count();

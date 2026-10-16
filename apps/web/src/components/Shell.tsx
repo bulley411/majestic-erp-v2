@@ -21,13 +21,14 @@ const NAV: { group: string; items: { label: string; key: string; perm?: string }
   {
     group: 'Finance',
     items: [
-      { label: 'Budgets', key: 'budgets', perm: 'budget.read' },  // ← A
-            { label: 'General ledger', key: 'ledger', perm: 'ledger.read' },
-            { label: 'Vendors', key: 'vendors', perm: 'voucher.read' },
+      { label: 'Budgets', key: 'budgets', perm: 'budget.read' },
+      { label: 'General ledger', key: 'ledger', perm: 'ledger.read' },
+      { label: 'Vendors', key: 'vendors', perm: 'voucher.read' },
       { label: 'Vouchers', key: 'vouchers', perm: 'voucher.read' },
-      { label: 'Payments', key: 'payments', perm: 'payment.read' },  // ← ADD
+      { label: 'Payments', key: 'payments', perm: 'payment.read' },
+      { label: 'Commission payouts', key: 'commission-payouts', perm: 'commission.read' },  // ← ADD
       { label: 'Reports', key: 'reports' },
-       { label: 'Finance settings', key: 'finance-settings', perm: 'voucher.read' },  // ← ADD
+      { label: 'Finance settings', key: 'finance-settings', perm: 'voucher.read' },
     ],
   },
   {

@@ -4,12 +4,14 @@ import ExpenseCategoriesPanel from './settings/ExpenseCategoriesPanel';
 import BanksPanel from './settings/BanksPanel';
 import PayrollAccountsPanel from './settings/PayrollAccountsPanel';
 import PaymentPayablesPanel from './settings/PaymentPayablesPanel';
+import CommissionSettingsPanel from './settings/CommissionSettingsPanel';   // ← ADD
 
 const TABS = [
   { id: 'expense-categories', label: 'Expense categories' },
   { id: 'banks', label: 'Banks' },
   { id: 'payroll-accounts', label: 'Payroll accounts' },
   { id: 'payment-payables', label: 'Payment payables' },
+  { id: 'commission', label: 'Commission' },   // ← ADD
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -23,6 +25,11 @@ export default function FinanceSettings() {
 
   const panelProps = { manage, showInactive, onError: setError };
 
+  const showInactiveToggle =
+    tab !== 'payroll-accounts' &&
+    tab !== 'payment-payables' &&
+    tab !== 'commission';
+
   return (
     <>
       <header className="topbar">
@@ -30,7 +37,7 @@ export default function FinanceSettings() {
         <div className="titlerow">
           <h2 className="page">Finance settings</h2>
           <div className="acts">
-            {tab !== 'payroll-accounts' ? (
+            {showInactiveToggle ? (
               <label className="inlinecheck">
                 <input
                   type="checkbox"
@@ -65,8 +72,11 @@ export default function FinanceSettings() {
           <PayrollAccountsPanel manage={manage} onError={setError} />
         ) : null}
         {tab === 'payment-payables' ? (
-  <PaymentPayablesPanel manage={manage} onError={setError} />
-) : null}
+          <PaymentPayablesPanel manage={manage} onError={setError} />
+        ) : null}
+        {tab === 'commission' ? (
+          <CommissionSettingsPanel manage={can('commission.manage')} onError={setError} />
+        ) : null}
       </div>
     </>
   );

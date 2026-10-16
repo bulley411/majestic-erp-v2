@@ -72,7 +72,7 @@ const PERMISSIONS = [
   'ledger.read',        // View ledger
   'ledger.post',        // Create/post journal entries
   'ledger.close_period', // Close fiscal periods
-  
+
    'voucher.read',    // View vouchers
   'voucher.raise',   // Create/update vouchers
   'voucher.approve', // Approve vouchers
@@ -84,19 +84,26 @@ const PERMISSIONS = [
   'payment.create',
   'payment.execute',
 
+  // Commission payout module
+  'commission.read',    // View batches, rows, sync logs, settings
+  'commission.import',  // Upload Excel, delete draft batches
+  'commission.process', // Process batch -> voucher, sync, retry rows
+  'commission.manage',  // Update integration settings, test webhook
 ];
 
 const ROLES: Record<string, { name: string; permissions: string[] }> = {
   ED: {
     name: 'Executive Director',
     permissions: ['employee.read', 'payroll.read', 'ledger.read',
-      'voucher.read', 'voucher.approve', 'report.read','attendance.read'],
+      'voucher.read', 'voucher.approve', 'report.read','attendance.read',
+      'commission.read'],
   },
   MD: {
     name: 'Managing Director',
     permissions: ['employee.read', 'payroll.read', 'payroll.approve',
       'ledger.read', 'voucher.read', 'voucher.approve', 'report.read','attendance.read',
-    'budget.read', 'budget.manage','payment.read','payment.execute',],
+    'budget.read', 'budget.manage','payment.read','payment.execute',
+    'commission.read', 'commission.manage'],
   },
   FINANCE_HEAD: {
     name: 'Head of Finance',
@@ -104,14 +111,16 @@ const ROLES: Record<string, { name: string; permissions: string[] }> = {
       'payroll.review', 'payroll.post', 'payroll.pay', 'ledger.read',
       'ledger.post', 'ledger.close_period', 'voucher.read', 'voucher.raise',
       'voucher.approve', 'report.read','attendance.read','budget.read', 'budget.manage',
-    'payment.read', 'payment.create', 'payment.execute',],
+    'payment.read', 'payment.create', 'payment.execute',
+    'commission.read', 'commission.import', 'commission.process', 'commission.manage'],
   },
   ACCOUNTANT: {
     name: 'Accountant',
     permissions: ['employee.read', 'payroll.read', 'payroll.prepare',
       'payroll.post', 'payroll.pay', 'ledger.read', 'ledger.post',
       'voucher.read', 'voucher.raise', 'report.read','attendance.read','budget.read',
-    'payment.read', 'payment.create'],
+    'payment.read', 'payment.create',
+    'commission.read', 'commission.import', 'commission.process'],
   },
  HR_OFFICER: {
     name: 'Head HR/Admin',

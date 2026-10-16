@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { PaymentsService } from './payments.service';
 import { BankFileService } from './bank-file.service';
+import { CommissionPayoutService } from '../commission-payout/commission-payout.service';
 import Decimal from 'decimal.js';
 import { z } from 'zod';
 import {
@@ -17,6 +18,7 @@ export class PaymentBatchesService {
     private prisma: PrismaService,
     private payments: PaymentsService,
     private bankFile: BankFileService,
+    private commission: CommissionPayoutService,
   ) {}
 
   async findAll(filters: { status?: string }) {
@@ -194,10 +196,7 @@ export class PaymentBatchesService {
     }
 
     const buffer = await this.bankFile.generateExcel(batchId);
-    const storedName = await saveFile(
-      buffer,
-      `batch-${batch.reference}.xlsx`,
-    );
+    const storedName = await saveFile(buffer, `batch-${batch.reference}.xlsx`);
     const hash = checksum(buffer);
 
     const updated = await this.prisma.paymentBatch.update({
@@ -217,10 +216,7 @@ export class PaymentBatchesService {
         action: 'payment_batch.file_generated',
         entityType: 'PaymentBatch',
         entityId: batchId,
-        after: {
-          storedName,
-          payments: batch.payments.length,
-        } as never,
+        after: { storedName, payments: batch.payments.length } as never,
       },
     });
 
@@ -268,154 +264,179 @@ export class PaymentBatchesService {
   }
 
   async markPaid(
-  batchId: string,
-  data: z.infer<typeof markPaidSchema>,
-  actorId: string,
-) {
-  const batch = await this.prisma.paymentBatch.findUniqueOrThrow({
-    where: { id: batchId },
-    include: {
-      payments: {
-        include: {
-          voucher: { select: { id: true, voucherNo: true, status: true } },
-          bank: { include: { account: true } },
-        },
-      },
-    },
-  });
-
-  if (batch.status !== 'SENT') {
-    throw new BadRequestException(
-      `Only SENT batches can be marked paid. Current: ${batch.status}.`,
-    );
-  }
-
-  const paidAt = new Date(data.paidAt);
-
-  const period = await this.prisma.fiscalPeriod.findUnique({
-    where: {
-      year_month: {
-        year: paidAt.getUTCFullYear(),
-        month: paidAt.getUTCMonth() + 1,
-      },
-    },
-  });
-
-  if (!period) {
-    throw new BadRequestException('Fiscal period not found for this date.');
-  }
-  if (period.isClosed) {
-    throw new BadRequestException('Fiscal period is closed.');
-  }
-
-  // Pre-flight: resolve all payable accounts and bank accounts
-  const payableByPayment = new Map<
-    string,
-    { accountId: string; key: string }
-  >();
-  for (const payment of batch.payments) {
-    const resolved = await this.payments.resolvePayableAccount(payment);
-    payableByPayment.set(payment.id, resolved);
-
-    if (!payment.bank?.account?.id) {
-      throw new BadRequestException(
-        `Payment ${payment.reference} has no bank account configured.`,
-      );
-    }
-  }
-
-  return this.prisma.$transaction(async (tx) => {
-    for (const payment of batch.payments) {
-      const resolved = payableByPayment.get(payment.id)!;
-
-      const entry = await tx.journalEntry.create({
-        data: {
-          reference: `JV/PAY/${payment.reference}`,
-          date: paidAt,
-          narration: `Payment of ${payment.reference}`,
-          sourceType: 'payment',
-          sourceId: payment.id,
-          status: 'POSTED',
-          periodId: period.id,
-          postedById: actorId,
-          postedAt: new Date(),
-          lines: {
-            create: [
-              {
-                accountId: resolved.accountId,
-                debit: payment.netAmount.toString(),
-                credit: '0.0000',
-                narration: `Settle ${resolved.key
-                  .replace(/_/g, ' ')
-                  .toLowerCase()} for ${payment.reference}`,
-                sortOrder: 0,
-              },
-              {
-                accountId: payment.bank!.account!.id,
-                debit: '0.0000',
-                credit: payment.netAmount.toString(),
-                narration: `Payment via ${payment.bank!.name}`,
-                sortOrder: 1,
-              },
-            ],
+    batchId: string,
+    data: z.infer<typeof markPaidSchema>,
+    actorId: string,
+  ) {
+    const batch = await this.prisma.paymentBatch.findUniqueOrThrow({
+      where: { id: batchId },
+      include: {
+        payments: {
+          include: {
+            voucher: { select: { id: true, voucherNo: true, status: true } },
+            bank: { include: { account: true } },
           },
         },
-      });
+      },
+    });
 
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: 'PAID',
-          paidAt,
-          externalReference: data.externalReference,
-          journalEntryId: entry.id,
-          recordedById: actorId,
-          recordedAt: new Date(),
+    if (batch.status !== 'SENT') {
+      throw new BadRequestException(
+        `Only SENT batches can be marked paid. Current: ${batch.status}.`,
+      );
+    }
+
+    const paidAt = new Date(data.paidAt);
+
+    const period = await this.prisma.fiscalPeriod.findUnique({
+      where: {
+        year_month: {
+          year: paidAt.getUTCFullYear(),
+          month: paidAt.getUTCMonth() + 1,
         },
-      });
+      },
+    });
 
-      if (payment.voucherId) {
-        await tx.voucher.update({
-          where: { id: payment.voucherId },
-          data: { status: 'PAID' as any },
+    if (!period) {
+      throw new BadRequestException('Fiscal period not found for this date.');
+    }
+    if (period.isClosed) {
+      throw new BadRequestException('Fiscal period is closed.');
+    }
+
+    // Pre-flight: resolve payable accounts and verify bank accounts
+    const payableByPayment = new Map<
+      string,
+      { accountId: string; key: string }
+    >();
+    for (const payment of batch.payments) {
+      const resolved = await this.payments.resolvePayableAccount(payment);
+      payableByPayment.set(payment.id, resolved);
+
+      if (!payment.bank?.account?.id) {
+        throw new BadRequestException(
+          `Payment ${payment.reference} has no bank account configured.`,
+        );
+      }
+    }
+
+    // Identify commission vouchers BEFORE the transaction
+    const commissionVoucherIds = batch.payments
+      .filter((p) => p.type === 'COMMISSION' && p.voucherId)
+      .map((p) => p.voucherId!);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      for (const payment of batch.payments) {
+        const resolved = payableByPayment.get(payment.id)!;
+
+        const entry = await tx.journalEntry.create({
+          data: {
+            reference: `JV/PAY/${payment.reference}`,
+            date: paidAt,
+            narration: `Payment of ${payment.reference}`,
+            sourceType: 'payment',
+            sourceId: payment.id,
+            status: 'POSTED',
+            periodId: period.id,
+            postedById: actorId,
+            postedAt: new Date(),
+            lines: {
+              create: [
+                {
+                  accountId: resolved.accountId,
+                  debit: payment.netAmount.toString(),
+                  credit: '0.0000',
+                  narration: `Settle ${resolved.key
+                    .replace(/_/g, ' ')
+                    .toLowerCase()} for ${payment.reference}`,
+                  sortOrder: 0,
+                },
+                {
+                  accountId: payment.bank!.account!.id,
+                  debit: '0.0000',
+                  credit: payment.netAmount.toString(),
+                  narration: `Payment via ${payment.bank!.name}`,
+                  sortOrder: 1,
+                },
+              ],
+            },
+          },
+        });
+
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: 'PAID',
+            paidAt,
+            externalReference: data.externalReference,
+            journalEntryId: entry.id,
+            recordedById: actorId,
+            recordedAt: new Date(),
+          },
+        });
+
+        if (payment.voucherId) {
+          await tx.voucher.update({
+            where: { id: payment.voucherId },
+            data: { status: 'PAID' as any },
+          });
+        }
+
+        await tx.paymentHistory.create({
+          data: {
+            paymentId: payment.id,
+            action: 'PAID',
+            actorId,
+            remarks: `Marked paid via batch ${batch.reference}`,
+          },
         });
       }
 
-      await tx.paymentHistory.create({
+      const updated = await tx.paymentBatch.update({
+        where: { id: batchId },
         data: {
-          paymentId: payment.id,
-          action: 'PAID',
-          actorId,
-          remarks: `Marked paid via batch ${batch.reference}`,
+          status: 'PAID',
+          completedAt: new Date(),
         },
       });
+
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'payment_batch.paid',
+          entityType: 'PaymentBatch',
+          entityId: batchId,
+          after: {
+            status: 'PAID',
+            externalReference: data.externalReference,
+            paidAt: paidAt.toISOString(),
+          } as never,
+        },
+      });
+
+      return { batch: updated, paidCount: batch.payments.length };
+    });
+
+    // ⬇️ Trigger commission sync (outside the transaction, fire-and-forget)
+    if (commissionVoucherIds.length) {
+      const commissionBatches =
+        await this.prisma.commissionPayoutBatch.findMany({
+          where: { voucherId: { in: commissionVoucherIds } },
+          select: { id: true },
+        });
+
+      for (const cb of commissionBatches) {
+        this.commission.onVoucherPaid(cb.id).catch((err) => {
+          // Logged; do not fail the payment
+          console.error(
+            `Commission sync failed for batch ${cb.id}: ${err.message}`,
+          );
+        });
+      }
     }
 
-    const updated = await tx.paymentBatch.update({
-      where: { id: batchId },
-      data: {
-        status: 'PAID',
-        completedAt: new Date(),
-      },
-    });
-
-    await tx.auditLog.create({
-      data: {
-        actorId,
-        action: 'payment_batch.paid',
-        entityType: 'PaymentBatch',
-        entityId: batchId,
-        after: {
-          status: 'PAID',
-          externalReference: data.externalReference,
-          paidAt: paidAt.toISOString(),
-        } as never,
-      },
-    });
-
-    return { batch: updated, paidCount: batch.payments.length };
-  });
-}
+    return result;
+  }
 
   async discard(batchId: string, actorId: string) {
     const batch = await this.prisma.paymentBatch.findUniqueOrThrow({

@@ -1645,3 +1645,200 @@ export const setPaymentPayableConfig = (key: string, accountId: string) =>
     body: JSON.stringify({ accountId }),
   });
 
+  /* -------------------------- commission payouts -------------------- */
+
+export type CommissionBatchStatus =
+  | 'DRAFT' | 'PROCESSING' | 'APPROVED' | 'PAID'
+  | 'SYNCING' | 'SYNCED' | 'SYNC_FAILED' | 'CANCELLED';
+
+export type CommissionRowStatus =
+  | 'PENDING' | 'PAID' | 'SYNCED' | 'SYNC_FAILED' | 'NO_ACCOUNT';
+
+export interface CommissionPayoutRow {
+  id: string;
+  batchId: string;
+  payCode: string;
+  agentCode: string;
+  recordCount: number;
+  rate: string;
+  amount: string;
+  accountName: string;
+  bank: string | null;
+  sortCode: string | null;
+  accountNumber: string | null;
+  status: CommissionRowStatus;
+  transferReference: string | null;
+  externalReference: string | null;
+  paidAt: string | null;
+  syncedAt: string | null;
+  syncAttempts: number;
+  lastSyncError: string | null;
+  syncResponse: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommissionPayoutBatch {
+  id: string;
+  fileName: string;
+  fileHash: string;
+  dateFrom: string;
+  dateTo: string;
+  generatedAt: string;
+  status: CommissionBatchStatus;
+  totalAmount: string;
+  totalRows: number;
+  paidRows: number;
+  syncedRows: number;
+  failedRows: number;
+  noAccountRows: number;
+  requireEdApproval: boolean;
+  requireMdApproval: boolean;
+  voucherId: string | null;
+  voucher?: { id: string; voucherNo: string; status: string } | null;
+  importedById: string;
+  processedById: string | null;
+  syncedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { rows: number };
+}
+
+export interface CommissionPayoutBatchDetail extends CommissionPayoutBatch {
+  rows: CommissionPayoutRow[];
+  syncLogs: CommissionPayoutSyncLog[];
+}
+
+export interface CommissionPayoutSyncLog {
+  id: string;
+  batchId: string;
+  rowId: string | null;
+  action: string;
+  requestBody: Record<string, unknown> | null;
+  responseBody: Record<string, unknown> | null;
+  statusCode: number | null;
+  success: boolean;
+  errorMessage: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+export interface CommissionSettings {
+  enabled: boolean;
+  baseUrl: string;
+  autoSyncOnPayment: boolean;
+  hasSecret: boolean;
+  sharedSecretHint: string;
+}
+
+export interface CommissionSettingsUpdate {
+  enabled?: boolean;
+  baseUrl?: string;
+  sharedSecret?: string;
+  autoSyncOnPayment?: boolean;
+}
+
+export interface CommissionImportResult {
+  id: string;
+  fileName: string;
+  status: CommissionBatchStatus;
+  totalRows: number;
+  totalAmount: string;
+  noAccountRows: number;
+}
+
+export const listCommissionBatches = (status?: string) =>
+  api<CommissionPayoutBatch[]>(
+    `/commission-payouts${status ? `?status=${status}` : ''}`,
+  );
+
+export const getCommissionBatch = (id: string) =>
+  api<CommissionPayoutBatchDetail>(`/commission-payouts/${id}`);
+
+export const getCommissionSettings = () =>
+  api<CommissionSettings>('/commission-payouts/settings');
+
+export const updateCommissionSettings = (data: CommissionSettingsUpdate) =>
+  api<CommissionSettings>('/commission-payouts/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+
+export const testCommissionWebhook = () =>
+  api<{ ok: boolean; message: string }>(
+    '/commission-payouts/settings/test-webhook',
+    { method: 'POST' },
+  );
+
+/**
+ * Uploads the Excel schedule via multipart/form-data. Cannot go through
+ * api() because Content-Type must be left to the browser so it can add
+ * its own boundary.
+ */
+export async function importCommissionBatch(
+  file: File,
+  options: { requireEdApproval: boolean; requireMdApproval: boolean; notes?: string },
+): Promise<CommissionImportResult> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('requireEdApproval', String(options.requireEdApproval));
+  form.append('requireMdApproval', String(options.requireMdApproval));
+  if (options.notes) form.append('notes', options.notes);
+
+  const send = (token: string | null) =>
+    fetch(`${BASE}/api/commission-payouts/import`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+
+  let res = await send(getAccessToken());
+  if (res.status === 401) {
+    const fresh = await refreshAccessToken();
+    if (fresh) res = await send(fresh);
+  }
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // Backend returns { message: { message, errors } } on validation failure
+    const message =
+      typeof body.message === 'string'
+        ? body.message
+        : body.message?.message ?? `Import failed (${res.status})`;
+    const err = new ApiError(message, res.status);
+    (err as ApiError & { rows?: string[] }).rows =
+      body.message?.errors ?? body.errors ?? [];
+    throw err;
+  }
+  return body;
+}
+
+export const processCommissionBatch = (
+  id: string,
+  data: { categoryId?: string; bankId?: string },
+) =>
+  api<{ batch: CommissionPayoutBatch; voucher: { id: string; voucherNo: string } }>(
+    `/commission-payouts/${id}/process`,
+    { method: 'POST', body: JSON.stringify(data) },
+  );
+
+export const syncCommissionBatch = (id: string, rowIds?: string[]) =>
+  api<{
+    batch: CommissionPayoutBatch;
+    response: { applied: number; ignored: number; rejected: unknown[] };
+  }>(`/commission-payouts/${id}/sync`, {
+    method: 'POST',
+    body: JSON.stringify({ rowIds }),
+  });
+
+export const retryCommissionRow = (batchId: string, rowId: string) =>
+  api<{
+    batch: CommissionPayoutBatch;
+    response: { applied: number; ignored: number; rejected: unknown[] };
+  }>(`/commission-payouts/${batchId}/rows/${rowId}/retry`, { method: 'POST' });
+
+export const cancelCommissionBatch = (id: string) =>
+  api<{ ok: boolean }>(`/commission-payouts/${id}`, { method: 'DELETE' });
+

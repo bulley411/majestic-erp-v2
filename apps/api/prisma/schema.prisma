@@ -691,34 +691,35 @@ enum VoucherStatus {
 
 /// Your Finance Officer Records "Expenses" sheet, as a first-class document.
 model Voucher {
-  id                   String            @id @default(uuid())
+  id                   String                 @id @default(uuid())
   /// MAPA/VCH/2026/001
-  voucherNo            String            @unique
+  voucherNo            String                 @unique
   date                 DateTime
   description          String
   categoryId           String?
-  category             ExpenseCategory?  @relation(fields: [categoryId], references: [id])
-  amount               Decimal           @db.Decimal(19, 4)
+  category             ExpenseCategory?       @relation(fields: [categoryId], references: [id])
+  amount               Decimal                @db.Decimal(19, 4)
   /// Withholding tax deducted at source.
-  whtRate              Decimal           @default(0) @db.Decimal(9, 6)
-  whtAmount            Decimal           @default(0) @db.Decimal(19, 4)
-  netAmount            Decimal           @db.Decimal(19, 4)
+  whtRate              Decimal                @default(0) @db.Decimal(9, 6)
+  whtAmount            Decimal                @default(0) @db.Decimal(19, 4)
+  netAmount            Decimal                @db.Decimal(19, 4)
   bankId               String?
-  bank                 Bank?             @relation(fields: [bankId], references: [id])
+  bank                 Bank?                  @relation(fields: [bankId], references: [id])
   beneficiary          String
   beneficiaryAccountNo String?
-  status               VoucherStatus     @default(DRAFT)
+  status               VoucherStatus          @default(DRAFT)
   raisedById           String?
   approvedById         String?
   approvedAt           DateTime?
   vendorId             String?
-  vendor               Vendor?           @relation(fields: [vendorId], references: [id])
+  vendor               Vendor?                @relation(fields: [vendorId], references: [id])
   /// Role required to approve, resolved from the amount when raised.
   requiredApproverRole String?
   rejectionReason      String?
   approvals            VoucherApproval[]
-  createdAt            DateTime          @default(now())
+  createdAt            DateTime               @default(now())
   payments             Payment[]
+  commissionBatch      CommissionPayoutBatch? // ← ADD
 
   @@index([date])
   @@index([status])
@@ -1055,4 +1056,124 @@ enum BatchStatus {
   PAID
   PARTIAL
   FAILED
+}
+
+// ============================================================
+// System Settings (for feature flags and misc config)
+// ============================================================
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// Commission Payout Integration (Plugin)
+// ============================================================
+
+enum CommissionBatchStatus {
+  DRAFT // Imported, not processed
+  PROCESSING // Voucher created, awaiting approval
+  APPROVED // Voucher approved, ready to pay
+  PAID // Voucher paid
+  SYNCING // Webhook calls in progress
+  SYNCED // All rows synced
+  SYNC_FAILED // Some rows failed
+  CANCELLED
+}
+
+enum CommissionRowStatus {
+  PENDING
+  PAID
+  SYNCED
+  SYNC_FAILED
+  NO_ACCOUNT
+}
+
+model CommissionPayoutBatch {
+  id          String                @id @default(uuid())
+  fileName    String
+  fileHash    String                @unique
+  dateFrom    DateTime
+  dateTo      DateTime
+  generatedAt DateTime
+  status      CommissionBatchStatus @default(DRAFT)
+
+  totalAmount   Decimal @db.Decimal(19, 4)
+  totalRows     Int
+  paidRows      Int     @default(0)
+  syncedRows    Int     @default(0)
+  failedRows    Int     @default(0)
+  noAccountRows Int     @default(0)
+
+  requireEdApproval Boolean @default(true)
+  requireMdApproval Boolean @default(false)
+
+  voucherId String?  @unique
+  voucher   Voucher? @relation(fields: [voucherId], references: [id])
+
+  importedById  String
+  processedById String?
+  syncedAt      DateTime?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rows     CommissionPayoutRow[]
+  syncLogs CommissionPayoutSyncLog[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CommissionPayoutRow {
+  id      String                @id @default(uuid())
+  batchId String
+  batch   CommissionPayoutBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  payCode       String  @unique
+  agentCode     String
+  recordCount   Int
+  rate          Decimal @db.Decimal(19, 4)
+  amount        Decimal @db.Decimal(19, 4)
+  accountName   String
+  bank          String?
+  sortCode      String?
+  accountNumber String?
+
+  status CommissionRowStatus @default(PENDING)
+
+  transferReference String?
+  externalReference String?
+  paidAt            DateTime?
+  syncedAt          DateTime?
+  syncAttempts      Int       @default(0)
+  lastSyncError     String?
+  syncResponse      Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId])
+  @@index([payCode])
+  @@index([status])
+}
+
+model CommissionPayoutSyncLog {
+  id           String                @id @default(uuid())
+  batchId      String
+  batch        CommissionPayoutBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowId        String?
+  action       String
+  requestBody  Json?
+  responseBody Json?
+  statusCode   Int?
+  success      Boolean
+  errorMessage String?
+  durationMs   Int?
+  createdAt    DateTime              @default(now())
+
+  @@index([batchId, createdAt])
 }

@@ -7,9 +7,12 @@ import { BankFileService } from './bank-file.service';
 import { PaymentPayableConfigController } from './payment-payable-config.controller';
 import { PaymentPayableConfigService } from './payment-payable-config.service';
 import { PayrollModule } from '../payroll/payroll.module';
+import { CommissionPayoutModule } from '../commission-payout/commission-payout.module';
+
+
 
 @Module({
-  imports: [PayrollModule],
+  imports: [PayrollModule,CommissionPayoutModule],
   controllers: [
     PaymentsController,
     PaymentBatchesController,
