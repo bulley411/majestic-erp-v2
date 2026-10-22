@@ -47,6 +47,15 @@ const blankVoucher = {
   notes: '',
 };
 
+// Local type matching the extended /vendors/options payload.
+type VendorOption = {
+  id: string;
+  code: string;
+  name: string;
+  accountNumber: string | null;
+  bankName: string | null;
+};
+
 export default function Vouchers() {
   const { can } = useAuth();
   const canRaise = can('voucher.raise');
@@ -385,7 +394,7 @@ function VoucherForm({
 }: {
   draft: any;
   setDraft: (data: any) => void;
-  vendors: { id: string; code: string; name: string }[];
+  vendors: VendorOption[];
   categories: { id: string; code: string; name: string }[];
   banks: { id: string; name: string }[];
   onSave: () => void;
@@ -415,6 +424,24 @@ function VoucherForm({
       clearTimeout(timer);
     };
   }, [draft.categoryId, draft.amount, draft.date]);
+
+  // Vendor selection auto-populates the beneficiary fields. Re-selecting a
+  // vendor resets them to that vendor's values; clearing the selection
+  // leaves whatever the user has typed.
+  const onVendorChange = (vid: string) => {
+    const vendor = vendors.find((v) => v.id === vid);
+    if (!vendor) {
+      // Cleared: keep existing values.
+      setDraft({ ...draft, vendorId: vid });
+      return;
+    }
+    setDraft({
+      ...draft,
+      vendorId: vid,
+      beneficiary: vendor.name,
+      beneficiaryAccountNo: vendor.accountNumber ?? '',
+    });
+  };
 
   return (
     <div className="fsection">
@@ -447,10 +474,7 @@ function VoucherForm({
         </label>
         <label className="ffield">
           <span>Vendor</span>
-          <select
-            value={draft.vendorId}
-            onChange={(e) => setDraft({ ...draft, vendorId: e.target.value })}
-          >
+          <select value={draft.vendorId} onChange={(e) => onVendorChange(e.target.value)}>
             <option value="">— Select vendor —</option>
             {vendors.map((v) => (
               <option key={v.id} value={v.id}>{v.code} - {v.name}</option>

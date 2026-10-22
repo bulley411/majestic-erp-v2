@@ -42,12 +42,18 @@ export class VendorsService {
   }
 
   async getOptions() {
-    return this.prisma.vendor.findMany({
-      where: { isActive: true },
-      select: { id: true, code: true, name: true },
-      orderBy: { name: 'asc' },
-    });
-  }
+  return this.prisma.vendor.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      accountNumber: true,
+      bankName: true,
+    },
+    orderBy: { name: 'asc' },
+  });
+}
 
   async findOne(id: string) {
     return this.prisma.vendor.findUniqueOrThrow({

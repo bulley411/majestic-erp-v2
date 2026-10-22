@@ -1034,6 +1034,17 @@ export interface VendorBalance {
   balance: string;
 }
 
+export interface VendorOption {
+  id: string;
+  code: string;
+  name: string;
+  accountNumber: string | null;
+  bankName: string | null;
+}
+
+export const getVendorOptions = () =>
+  api<VendorOption[]>('/vendors/options');
+
 export const listVendors = (search?: string, type?: string, includeInactive = false) => {
   const params = new URLSearchParams();
   if (search) params.append('search', search);
@@ -1043,8 +1054,14 @@ export const listVendors = (search?: string, type?: string, includeInactive = fa
   return api<Vendor[]>(`/vendors${query ? `?${query}` : ''}`);
 };
 
-export const getVendorOptions = () =>
-  api<{ id: string; code: string; name: string }[]>('/vendors/options');
+// export const getVendorOptions = () =>
+//   api<{
+//     id: string;
+//     code: string;
+//     name: string;
+//     accountNumber: string | null;
+//     bankName: string | null;
+//   }[]>('/vendors/options');
 
 export const getVendor = (id: string) =>
   api<Vendor>(`/vendors/${id}`);
