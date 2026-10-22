@@ -33,7 +33,7 @@ services:
     networks: [internal]
 
   api:
-    image: ghcr.io/bulley411/majestic-erp-v2-api:latest
+    image: ghcr.io/bulley411/majestic-erp-api:latest
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -52,7 +52,7 @@ services:
     networks: [internal, dokploy-network]
 
   web:
-    image: ghcr.io/bulley411/majestic-erp-v2-web:latest
+    image: ghcr.io/bulley411/majestic-erp-web:latest
     restart: unless-stopped
     depends_on:
       - api
